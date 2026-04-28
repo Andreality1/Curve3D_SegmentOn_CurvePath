@@ -174,7 +174,7 @@
     <div id="canvas-container">
         <canvas id="shaderCanvas" width="720" height="360"></canvas>
         <div class="canvas-controls">
-            <button id="pausePlayBtn" class="paused-state" onclick="togglePause()">Play (Alt+S)</button>
+            <button id="pausePlayBtn" class="playing-state" onclick="togglePause()">Pause (Alt+S)</button>
         </div>
     </div>
 
@@ -193,7 +193,7 @@
                 </div>
             </div>
             <div class="editor-container">
-                <div id="line-numbers">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br>21<br>22<br>23<br>24<br>25<br>26<br>27<br>28<br>29<br>30<br>31<br>32<br>33<br>34<br>35<br>36<br>37<br>38<br>39<br>40<br>41<br>42<br>43<br>44<br>45<br>46<br>47<br>48<br>49<br>50<br>51<br>52<br>53<br>54<br>55<br>56<br>57<br>58<br>59<br>60<br>61<br>62<br>63<br>64<br>65<br>66<br>67<br>68<br>69<br>70<br>71<br>72<br>73<br>74<br>75<br>76<br>77<br>78<br>79<br>80<br>81<br>82<br>83<br>84<br>85<br>86<br>87<br>88<br>89<br>90<br>91<br>92<br>93<br>94<br>95<br>96<br>97<br>98<br>99<br>100<br>101<br>102<br>103<br>104<br>105<br>106<br>107<br>108<br>109<br>110<br>111<br>112<br>113<br>114<br>115<br>116<br>117<br>118<br>119<br>120<br>121<br>122<br>123<br>124<br>125<br>126<br>127<br>128<br>129<br>130<br>131<br>132<br>133<br>134<br>135<br>136<br>137<br>138<br>139<br>140<br>141<br>142<br>143<br>144<br>145<br>146<br>147<br>148<br>149<br>150<br>151<br>152<br>153<br>154<br>155<br>156<br>157<br>158<br>159</div>
+                <div id="line-numbers">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20<br>21<br>22<br>23<br>24<br>25<br>26<br>27<br>28<br>29<br>30<br>31<br>32<br>33<br>34<br>35<br>36<br>37<br>38<br>39<br>40<br>41<br>42<br>43<br>44<br>45<br>46<br>47<br>48<br>49<br>50<br>51<br>52<br>53<br>54<br>55<br>56<br>57<br>58<br>59<br>60<br>61<br>62<br>63<br>64<br>65<br>66<br>67<br>68<br>69<br>70<br>71<br>72<br>73<br>74<br>75<br>76<br>77<br>78<br>79<br>80<br>81<br>82<br>83<br>84<br>85<br>86<br>87<br>88<br>89<br>90<br>91<br>92<br>93<br>94<br>95<br>96<br>97<br>98<br>99<br>100<br>101<br>102<br>103<br>104<br>105<br>106<br>107<br>108<br>109<br>110<br>111<br>112<br>113<br>114<br>115<br>116<br>117<br>118<br>119<br>120<br>121<br>122<br>123<br>124<br>125<br>126<br>127<br>128<br>129<br>130<br>131<br>132<br>133<br>134<br>135<br>136<br>137<br>138<br>139<br>140<br>141<br>142<br>143<br>144<br>145</div>
                 <textarea id="shaderEditor" spellcheck="false" oninput="updateLineNumbers()" onscroll="syncScroll()">#version 300 es
 precision highp float;
 
@@ -201,11 +201,10 @@ uniform float u_time;
 uniform vec2 u_resolution;
 out vec4 outColor;
 
-#define MAX_STEPS 160
-#define SURFACE_DIST 0.0004
+#define MAX_STEPS 160    // Increased to handle smaller steps
+#define SURFACE_DIST 0.0004 
 #define MAX_DIST 20.0
 
-// The 8 control points for our looping spline
 const vec3 SPLINE_PTS[8] = vec3[](
     vec3(-1.5, 1.2, 0.5),  vec3(-0.8, 2.5, -0.6), 
     vec3(0.0, 1.0, 1.2),   vec3(1.4, 0.5, 1.4),
@@ -223,88 +222,75 @@ float sdBox(vec3 p, vec3 b) {
     return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
 }
 
-// Optimization: Pre-calculates cubic coefficients for the Catmull-Rom segment
-// Reduces A, B, C, D such that Pos(f) = Af^3 + Bf^2 + Cf + D
-void getSplineCoeffs(int i, out vec3 A, out vec3 B, out vec3 C, out vec3 D) {
-    vec3 p1 = SPLINE_PTS[i]; 
-    vec3 p2 = SPLINE_PTS[(i + 1) % 8]; 
-    vec3 p0 = SPLINE_PTS[(i + 7) % 8]; 
-    vec3 p3 = SPLINE_PTS[(i + 2) % 8];
-
-    A = 0.5 * (-p0 + 3.0 * p1 - 3.0 * p2 + p3);
-    B = 0.5 * (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3);
-    C = 0.5 * (-p0 + p2);
-    D = p1;
+void getControlPoints(float t, out vec3 p0, out vec3 p1, out vec3 p2, out vec3 p3) {
+    int i = int(floor(mod(t, 8.0)));
+    p1 = SPLINE_PTS[i]; 
+    p2 = SPLINE_PTS[(i + 1) % 8]; 
+    p0 = SPLINE_PTS[(i + 7) % 8]; 
+    p3 = SPLINE_PTS[(i + 2) % 8];
 }
 
-// Horner's Method for efficient polynomial evaluation
-vec3 evalPos(vec3 A, vec3 B, vec3 C, vec3 D, float f) {
-    return ((A * f + B) * f + C) * f + D;
+vec3 getPos(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float f) {
+    float f2 = f * f, f3 = f2 * f;
+    return 0.5 * ((2.0 * p1) + (-p0 + p2) * f + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * f2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * f3);
 }
 
-vec3 evalDeriv(vec3 A, vec3 B, vec3 C, float f) {
-    return (3.0 * A * f + 2.0 * B) * f + C;
+vec3 getDeriv(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float f) {
+    return 0.5 * ((-p0 + p2) + 2.0 * (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * f + 3.0 * (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * (f * f));
 }
 
-vec3 evalAcc(vec3 A, vec3 B, float f) {
-    return 6.0 * A * f + 2.0 * B;
+vec3 getAcc(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float f) {
+    return 0.5 * (2.0 * (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) + 6.0 * (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * f);
 }
 
 float sdSplineDynamic(vec3 queryP, out float hitT) {
-    // Bounding volume to skip heavy math
     vec3 boxCenter = vec3(0.15, 1.5, 0.0);
     vec3 boxHalfExtents = vec3(2.4, 1.9, 2.4); 
     float dBound = sdBox(queryP - boxCenter, boxHalfExtents);
     if (dBound &gt; 0.4) return dBound;
 
     float bestT = 0.0, minDistSq = 1e10;
-    int bestIdx = 0;
-
-    // Step 1: Coarse Pass (Find the nearest segment)
-    for(int i = 0; i &lt; 8; i++) {
-        for(float j = 0.0; j &lt; 1.0; j += 0.33) {
-            vec3 A, B, C, D;
-            getSplineCoeffs(i, A, B, C, D);
-            vec3 pos = evalPos(A, B, C, D, j);
-            float dSq = dot(queryP - pos, queryP - pos);
-            if(dSq &lt; minDistSq) { 
-                minDistSq = dSq; 
-                bestIdx = i; 
-                bestT = j; 
-            }
-        }
+    
+    // Step 1: Coarse Pass
+    for(int i = 0; i &lt;= 24; i++) {
+        float t = (float(i) / 24.0) * 8.0;
+        vec3 p0, p1, p2, p3; 
+        getControlPoints(t, p0, p1, p2, p3);
+        vec3 pos = getPos(p0, p1, p2, p3, fract(t));
+        float dSq = dot(queryP - pos, queryP - pos);
+        if(dSq &lt; minDistSq) { minDistSq = dSq; bestT = t; }
     }
 
-    // Pre-calculate coefficients for the best segment only
-    vec3 A, B, C, D;
-    getSplineCoeffs(bestIdx, A, B, C, D);
-
-    // Step 2: Refined Search (Ternary search on local segment)
-    float bLow = max(0.0, bestT - 0.2), bHigh = min(1.0, bestT + 0.2);
-    for(int i = 0; i &lt; 5; i++) {
-        float m1 = bLow + (bHigh - bLow) * 0.33;
-        float m2 = bLow + (bHigh - bLow) * 0.66;
-        float d1 = dot(queryP - evalPos(A, B, C, D, m1), queryP - evalPos(A, B, C, D, m1));
-        float d2 = dot(queryP - evalPos(A, B, C, D, m2), queryP - evalPos(A, B, C, D, m2));
+    // Step 2: Refined Search
+    float range = 0.35; 
+    float bLow = bestT - range, bHigh = bestT + range;
+    for(int i = 0; i &lt; 6; i++) {
+        float m1 = bLow + (bHigh - bLow) * 0.33, m2 = bLow + (bHigh - bLow) * 0.66;
+        vec3 p0, p1, p2, p3;
+        getControlPoints(m1, p0, p1, p2, p3); 
+        float d1 = dot(queryP - getPos(p0, p1, p2, p3, fract(m1)), queryP - getPos(p0, p1, p2, p3, fract(m1)));
+        getControlPoints(m2, p0, p1, p2, p3); 
+        float d2 = dot(queryP - getPos(p0, p1, p2, p3, fract(m2)), queryP - getPos(p0, p1, p2, p3, fract(m2)));
         if(d1 &lt; d2) bHigh = m2; else bLow = m1;
     }
-    float f = (bLow + bHigh) * 0.5;
+    bestT = (bLow + bHigh) * 0.5;
 
-    // Step 3: One-pass Newton-Raphson for precision
-    vec3 pos = evalPos(A, B, C, D, f);
-    vec3 vel = evalDeriv(A, B, C, f);
-    vec3 acc = evalAcc(A, B, f);
-    vec3 rel = pos - queryP;
+    // Step 3: Dampened Newton-Raphson
+    vec3 p0, p1, p2, p3; 
+    getControlPoints(bestT, p0, p1, p2, p3);
+    float f = fract(bestT);
+    vec3 pos = getPos(p0, p1, p2, p3, f), vel = getDeriv(p0, p1, p2, p3, f), acc = getAcc(p0, p1, p2, p3, f), rel = pos - queryP;
+    
     float move = dot(rel, vel) / (dot(vel, vel) + dot(rel, acc) + 1e-5);
-    f = clamp(f - move, 0.0, 1.0);
+    bestT = bestT - clamp(move, -0.1, 0.1); // DAMPENING to prevent overshooting
+    hitT = bestT;
     
-    hitT = float(bestIdx) + f;
-    
-    // Aesthetic Pulse logic
-    float pulse = mod(hitT - u_time * 2.5, 8.0);
+    float pulse = mod(bestT - u_time * 2.5, 8.0);
     float mask = smoothstep(1.5, 1.2, pulse) * smoothstep(0.0, 0.3, pulse);
+    getControlPoints(bestT, p0, p1, p2, p3);
     
-    float d = length(queryP - evalPos(A, B, C, D, f));
+    // Calculate final distance with a small safety margin
+    float d = length(queryP - getPos(p0, p1, p2, p3, fract(bestT)));
     return d - mix(0.015, 0.05, mask);
 }
 
@@ -320,13 +306,13 @@ vec3 render(vec2 uv) {
     
     for(int i = 0; i &lt; MAX_STEPS; i++) {
         float d = sdSplineDynamic(ro + rd * dist, hitT); 
+        // Conservative Step Size (0.5) is the most important fix for artifacts
         if(d &lt; SURFACE_DIST) { hit = true; break; }
         if(dist &gt; MAX_DIST) break;
-        dist += d * 0.6; // Slightly more aggressive step for performance
+        dist += d * 0.5; 
     }
 
     if(hit) {
-        // Re-run distance for visual data
         sdSplineDynamic(ro + rd * dist, hitT);
         float pulse = mod(hitT - u_time * 2.5, 8.0);
         float mask = smoothstep(1.5, 1.2, pulse) * smoothstep(0.0, 0.3, pulse);
@@ -344,7 +330,7 @@ vec3 render(vec2 uv) {
 
 void main() {
     vec2 res = u_resolution.xy;
-    // Standard 4-sample anti-aliasing
+    // Jittered sampling for cleaner AA
     vec3 c0 = render((gl_FragCoord.xy + vec2(-0.15, -0.35) - 0.5 * res) / res.y);
     vec3 c1 = render((gl_FragCoord.xy + vec2(0.35, -0.15) - 0.5 * res) / res.y);
     vec3 c2 = render((gl_FragCoord.xy + vec2(-0.35, 0.15) - 0.5 * res) / res.y);
@@ -361,7 +347,7 @@ void main() {
                 <span>System Output</span>
                 <span id="term-status-icon">▼</span>
             </div>
-            <div id="terminal"><div class="log-entry update"><span class="time">[56ms]</span><span class="content">File Saved Locally</span></div><div class="log-entry update"><span class="time">[59ms]</span><span class="content">Time: 2.34s | FPS: 144</span></div></div>
+            <div id="terminal"><div class="log-entry update"><span class="time">[55ms]</span><span class="content">Shader Compiled Successfully</span></div><div class="log-entry update"><span class="time">[219094ms]</span><span class="content">Time: 4.81s | FPS: 75</span></div></div>
         </div>
     </div>
 
